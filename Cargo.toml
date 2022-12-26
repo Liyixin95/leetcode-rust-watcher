@@ -1,0 +1,22 @@
+[package]
+name = "leetcode-rust"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+tokio = { version = "1.12.0", features = ["fs"] }
+proc-macro2 = "1.0.30"
+axum = "0.6"
+notify = "5.0.0"
+log = "0.4.14"
+env_logger = "0.10.0"
+crossbeam = "0.8.1"
+anyhow = "1.0.44"
+syn = { version = "1.0.80", features = ["full", "extra-traits"] }
+quote = "1.0.10"
+os_str_bytes = "6"
+
+
