@@ -1,16 +1,15 @@
 use anyhow::anyhow;
-use os_str_bytes::OsStrBytes;
 use proc_macro2::{Ident, Literal, TokenStream};
 use quote::{format_ident, quote, ToTokens};
 use std::collections::HashMap;
-use std::ffi::{OsStr, OsString};
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use syn::parse::{Parse, ParseStream};
 use syn::{AttrStyle, File, Item, ItemMod, Token};
 
+#[derive(Default)]
 pub struct Mapping {
-    items: HashMap<OsString, Mod>,
+    items: HashMap<String, Mod>,
 }
 
 impl Mapping {
@@ -22,13 +21,13 @@ impl Mapping {
         });
     }
 
-    pub fn delete_file<'a>(&'a mut self, path: &'a OsStr) -> Option<&OsStr> {
+    pub fn delete_file<'a>(&'a mut self, path: &'a str) -> Option<&str> {
         self.items.remove(path).map(|_| path)
     }
 
-    pub fn insert_file(&mut self, file_path: PathBuf, file_name: &OsStr) -> anyhow::Result<()> {
-        let m = Mod::new(file_path, file_name)?;
-        self.items.insert(m.file_name(), m);
+    pub fn insert_file(&mut self, file_name: &str) -> anyhow::Result<()> {
+        let m = Mod::new(file_name)?;
+        self.items.insert(file_name.to_string(), m);
         Ok(())
     }
 
@@ -65,7 +64,7 @@ impl Mapping {
 #[derive(Clone)]
 struct ModPath {
     _punct: Token![=],
-    pub(crate) path: PathBuf,
+    pub(crate) path: String,
 }
 
 impl Parse for ModPath {
@@ -73,12 +72,10 @@ impl Parse for ModPath {
         Ok(Self {
             _punct: input.parse()?,
             path: input.call(Literal::parse).map(|lit| {
-                let path = lit.to_string();
-                let path = path
-                    .get(1..(path.len() - 1))
+                lit.to_string()
+                    .get(1..(lit.to_string().len() - 1))
                     .unwrap_or_default()
-                    .to_string();
-                PathBuf::from(path)
+                    .to_string()
             })?,
         })
     }
@@ -86,21 +83,21 @@ impl Parse for ModPath {
 
 impl ToTokens for Mod {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        if let Some(path) = &self.attr {
-            let lit = Literal::byte_string(path.as_os_str().to_raw_bytes().as_ref());
-            let attr = quote! {
-                #[path = #lit]
-            };
-
-            attr.to_tokens(tokens);
-        }
-
         let identity = &self.identity;
-        let tokenstream = quote! {
-            mod #identity;
+
+        let ts = if let Some(path) = &self.attr {
+            let lit = Literal::string(path);
+            quote! {
+                #[path = #lit]
+                mod #identity;
+            }
+        } else {
+            quote! {
+                mod #identity;
+            }
         };
 
-        tokenstream.to_tokens(tokens);
+        ts.to_tokens(tokens);
     }
 }
 
@@ -132,39 +129,36 @@ impl From<ItemMod> for Mod {
 }
 
 struct Mod {
-    attr: Option<PathBuf>,
+    attr: Option<String>,
     identity: Ident,
 }
 
 fn filter_numer<T>(input: T) -> anyhow::Result<u64>
 where
-    T: Deref<Target = OsStr>,
+    T: Deref<Target = str>,
 {
-    let lossy = input.to_string_lossy();
-
-    lossy
+    input
         .chars()
         .filter(|c| c.is_digit(10))
         .collect::<String>()
         .parse()
-        .map_err(|_| anyhow!("invalid input: {lossy}"))
+        .map_err(|_| anyhow!("invalid input: {}", &*input))
 }
 
 impl Mod {
-    fn file_name(&self) -> OsString {
+    fn file_name(&self) -> String {
         self.attr
             .as_ref()
-            .and_then(|s| s.file_name())
-            .map(|s| s.to_os_string())
+            .map(|s| s.clone())
             .unwrap_or_else(|| format!("{}.rs", self.identity).into())
     }
 
-    fn new(file_path: PathBuf, file_name: &OsStr) -> anyhow::Result<Self> {
+    fn new(file_name: &str) -> anyhow::Result<Self> {
         let file_number = filter_numer(file_name)?;
-        let identity = format_ident!("leetcode-{file_number}");
+        let identity = format_ident!("leetcode_{file_number}");
 
         Ok(Self {
-            attr: Some(file_path),
+            attr: Some(file_name.to_string()),
             identity,
         })
     }
@@ -176,27 +170,21 @@ mod tests {
 
     #[test]
     fn test_filter_number() {
-        let input = OsString::from("10.test.rs");
-        assert_eq!(filter_numer(input).unwrap(), 10);
+        assert_eq!(filter_numer("10.test.rs").unwrap(), 10);
     }
 
     #[test]
     fn test() {
         let test = r#"
-        #[path="./1.rs"]
+        #[path="1.rs"]
         mod a;
 
-        #[path="./2.rs"]
+        #[path="2.rs"]
         mod b;
         "#;
 
         let mapping = Mapping::from_str(test).unwrap();
         let ret = mapping.print();
         println!("{ret}");
-    }
-
-    #[test]
-    fn test1() {
-        let s = String::from("中文");
     }
 }
