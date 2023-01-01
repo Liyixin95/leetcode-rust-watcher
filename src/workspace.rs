@@ -54,7 +54,7 @@ fn lib_rs(dir: &Path) -> io::Result<String> {
         let _ = mapping.insert_file(file_name);
     }
 
-    Ok(mapping.print())
+    Ok(mapping.to_string())
 }
 
 fn cargo_toml(name: &str) -> String {

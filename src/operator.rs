@@ -78,7 +78,6 @@ impl Operator {
     }
 
     fn flush(&self) -> anyhow::Result<()> {
-        let content = self.mapping.print();
         let mut file = OpenOptions::new()
             .read(true)
             .write(true)
@@ -86,7 +85,7 @@ impl Operator {
             .create(true)
             .open(&self.lib_path)?;
 
-        file.write_all(content.as_bytes())?;
+        file.write_all(self.mapping.to_string().as_bytes())?;
 
         Ok(())
     }

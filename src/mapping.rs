@@ -1,15 +1,25 @@
-use anyhow::anyhow;
-use proc_macro2::{Ident, Literal, TokenStream};
-use quote::{format_ident, quote, ToTokens};
 use std::collections::HashMap;
+use std::fmt::{Display, Formatter};
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
-use syn::parse::{Parse, ParseStream};
+use anyhow::anyhow;
+use proc_macro2::{Ident, Literal};
+use quote::{format_ident, quote};
 use syn::{AttrStyle, File, Item, ItemMod, Token};
+use syn::parse::{Parse, ParseStream};
 
 #[derive(Default)]
 pub struct Mapping {
     items: HashMap<String, Mod>,
+}
+
+impl Display for Mapping {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        self.items
+            .iter()
+            .map(|(_, v)| v)
+            .try_for_each(|m| write!(f, "{m}"))
+    }
 }
 
 impl Mapping {
@@ -49,16 +59,6 @@ impl Mapping {
 
         Ok(Mapping { items: map })
     }
-
-    pub fn print(&self) -> String {
-        let iter = self.items.iter().map(|(_, v)| v);
-
-        let tokenstream = quote! {
-            #(#iter)*
-        };
-
-        tokenstream.to_string()
-    }
 }
 
 #[derive(Clone)]
@@ -78,26 +78,6 @@ impl Parse for ModPath {
                     .to_string()
             })?,
         })
-    }
-}
-
-impl ToTokens for Mod {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        let identity = &self.identity;
-
-        let ts = if let Some(path) = &self.attr {
-            let lit = Literal::string(path);
-            quote! {
-                #[path = #lit]
-                mod #identity;
-            }
-        } else {
-            quote! {
-                mod #identity;
-            }
-        };
-
-        ts.to_tokens(tokens);
     }
 }
 
@@ -131,6 +111,25 @@ impl From<ItemMod> for Mod {
 struct Mod {
     attr: Option<String>,
     identity: Ident,
+}
+
+impl Display for Mod {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if let Some(path) = &self.attr {
+            let lit = Literal::string(path);
+            let ts = quote! {
+                #[path = #lit]
+            };
+            writeln!(f, "{ts}")?;
+        }
+
+        let identity = &self.identity;
+        let ts = quote! {
+            mod #identity;
+        };
+
+        writeln!(f, "{ts}")
+    }
 }
 
 fn filter_numer<T>(input: T) -> anyhow::Result<u64>
@@ -184,7 +183,6 @@ mod tests {
         "#;
 
         let mapping = Mapping::from_str(test).unwrap();
-        let ret = mapping.print();
-        println!("{ret}");
+        println!("{mapping}");
     }
 }
