@@ -1,9 +1,10 @@
-use crate::mapping::Mapping;
-use crate::watcher::Event;
-use crossbeam::channel::{Receiver, TryRecvError};
 use std::fs::OpenOptions;
+use std::io;
 use std::io::{Read, Write};
 use std::path::PathBuf;
+use crossbeam::channel::{Receiver, TryRecvError};
+use crate::mapping::Mapping;
+use crate::watcher::Event;
 
 pub struct Operator {
     rx: Receiver<Event>,
@@ -64,11 +65,17 @@ impl Operator {
         }
 
         match &ev {
-            Event::Create(path) => self
-                .mapping
-                .insert_file(file_name)
-                .map(|_| log::info!("create file:  {}", path.display()))
-                .unwrap_or_else(|e| log::error!("{e}")),
+            Event::Create(path) => {
+                if let Err(e) = append_use(path) {
+                    log::error!("fail to appen use statement in {}, cause: {e}", path.display());
+                }
+
+                self
+                    .mapping
+                    .insert_leetcode_file(file_name)
+                    .map(|_| log::info!("create file:  {}", path.display()))
+                    .unwrap_or_else(|e| log::error!("{e}"))
+            },
             Event::Delete(_) => self
                 .mapping
                 .delete_file(file_name)
@@ -89,4 +96,13 @@ impl Operator {
 
         Ok(())
     }
+}
+
+fn append_use(path: &PathBuf) -> io::Result<()> {
+    let mut file = OpenOptions::new().read(true).write(true).open(path)?;
+    let mut buf = String::from("use crate::data_struct::*;\n");
+    file.read_to_string(&mut buf)?;
+    file.write_all(buf.as_bytes())?;
+    file.set_len(buf.len() as u64)?;
+    file.flush()
 }

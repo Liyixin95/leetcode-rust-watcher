@@ -35,8 +35,13 @@ impl Mapping {
         self.items.remove(path).map(|_| path)
     }
 
-    pub fn insert_file(&mut self, file_name: &str) -> anyhow::Result<()> {
-        let m = Mod::new(file_name)?;
+    pub fn insert_file(&mut self, file_name: &str) {
+        let m = Mod::file_mod(file_name);
+        self.items.insert(file_name.to_string(), m);
+    }
+
+    pub fn insert_leetcode_file(&mut self, file_name: &str) -> anyhow::Result<()> {
+        let m = Mod::leetcode_mod(file_name)?;
         self.items.insert(file_name.to_string(), m);
         Ok(())
     }
@@ -152,7 +157,16 @@ impl Mod {
             .unwrap_or_else(|| format!("{}.rs", self.identity).into())
     }
 
-    fn new(file_name: &str) -> anyhow::Result<Self> {
+    fn file_mod(file_name: &str) -> Self {
+        let prefix = file_name.rfind(".")
+            .unwrap_or(file_name.len());
+        Self {
+            attr: None,
+            identity: format_ident!("{}", file_name[0..prefix]),
+        }
+    }
+
+    fn leetcode_mod(file_name: &str) -> anyhow::Result<Self> {
         let file_number = filter_numer(file_name)?;
         let identity = format_ident!("leetcode_{file_number}");
 

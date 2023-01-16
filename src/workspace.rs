@@ -2,11 +2,16 @@ use std::fs::{read_dir, OpenOptions};
 use std::io;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-
 use crate::mapping::Mapping;
 use anyhow::anyhow;
 
+const DATA_STRUCT_FILE: &'static str = "data_struct.rs";
+
 pub fn init_workspace(dir_path: PathBuf) -> anyhow::Result<()> {
+    let mut data_struct_path = dir_path.clone();
+    data_struct_path.push(DATA_STRUCT_FILE);
+    create_file(data_struct_path, data_struct_rs())?;
+
     let mut cargo_toml_path = dir_path.clone();
     cargo_toml_path.push("Cargo.toml");
     let cur_dir_name = dir_path
@@ -32,6 +37,11 @@ fn create_file(path: PathBuf, content: String) -> io::Result<()> {
     file.write_all(content.as_bytes())
 }
 
+fn data_struct_rs() -> String {
+    const DATA_STRUCT: &str = include_str!("./data_struct.rs.temp");
+    DATA_STRUCT.to_string()
+}
+
 fn lib_rs(dir: &Path) -> io::Result<String> {
     let dir_iter = read_dir(dir)?;
     let mut mapping = Mapping::default();
@@ -51,7 +61,11 @@ fn lib_rs(dir: &Path) -> io::Result<String> {
             continue;
         };
 
-        let _ = mapping.insert_file(file_name);
+        if file_name == DATA_STRUCT_FILE {
+            mapping.insert_file(file_name);
+        } else {
+            let _ = mapping.insert_leetcode_file(file_name);
+        }
     }
 
     Ok(mapping.to_string())
